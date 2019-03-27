@@ -5,10 +5,10 @@ authors = ["Matt Corallo <git@bluematt.me>"]
 build = "build.rs"
 
 [dependencies]
-bitcoin = "0.16"
+bitcoin = "0.17.1"
 bitcoin-bech32 = "0.7"
 bitcoin_hashes = "0.3"
-lightning = "0.0.8"
+lightning = { git = "https://github.com/sgeisler/rust-lightning.git", branch = "configurable_min_depth" }
 lightning-invoice = "0.2"
 secp256k1 = "0.12"
 hyper = "0.12"

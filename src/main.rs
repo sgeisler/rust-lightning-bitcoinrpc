@@ -55,10 +55,10 @@ use lightning::util::config;
 use bitcoin::blockdata;
 use bitcoin::network::constants;
 use bitcoin::consensus::encode;
-use bitcoin::util::hash::Sha256dHash;
 use bitcoin::util;
 
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{Hash, sha256d};
+use bitcoin_hashes::hex::{FromHex, ToHex};
 
 use std::{env, mem};
 use std::collections::HashMap;
@@ -211,10 +211,10 @@ impl ChannelMonitor {
 			let file = file_option.unwrap();
 			if let Some(filename) = file.file_name().to_str() {
 				if filename.is_ascii() && filename.len() > 65 {
-					if let Ok(txid) = Sha256dHash::from_hex(filename.split_at(64).0) {
+					if let Ok(txid) = sha256d::Hash::from_hex(filename.split_at(64).0) {
 						if let Ok(index) = filename.split_at(65).1.split('.').next().unwrap().parse() {
 							if let Ok(contents) = fs::read(&file.path()) {
-								if let Ok((last_block_hash, loaded_monitor)) = <(Sha256dHash, channelmonitor::ChannelMonitor)>::read(&mut Cursor::new(&contents), Arc::new(LogPrinter{})) {
+								if let Ok((last_block_hash, loaded_monitor)) = <(sha256d::Hash, channelmonitor::ChannelMonitor)>::read(&mut Cursor::new(&contents), Arc::new(LogPrinter{})) {
 									// TODO: Rescan from last_block_hash
 									res.push((chain::transaction::OutPoint { txid, index }, loaded_monitor));
 									loaded = true;
@@ -259,7 +259,7 @@ impl channelmonitor::ManyChannelMonitor for ChannelMonitor {
 		// Note that this actually *isn't* enough (at least on Linux)! We need to fsync an fd with
 		// the containing dir, but Rust doesn't let us do that directly, sadly. TODO: Fix this with
 		// the libc crate!
-		let filename = format!("{}/{}_{}", self.file_prefix, funding_txo.txid.be_hex_string(), funding_txo.index);
+		let filename = format!("{}/{}_{}", self.file_prefix, funding_txo.txid.to_hex(), funding_txo.index);
 		let tmp_filename = filename.clone() + ".tmp";
 
 		{
@@ -376,18 +376,18 @@ fn main() {
 	};
 	let keys = Arc::new(KeysManager::new(&our_node_seed, network, logger.clone()));
 	let (import_key_1, import_key_2) = util::bip32::ExtendedPrivKey::new_master(network, &our_node_seed).map(|extpriv| {
-		(extpriv.ckd_priv(&secp_ctx, util::bip32::ChildNumber::from_hardened_idx(1)).unwrap().secret_key,
-		 extpriv.ckd_priv(&secp_ctx, util::bip32::ChildNumber::from_hardened_idx(2)).unwrap().secret_key)
+		(extpriv.ckd_priv(&secp_ctx, util::bip32::ChildNumber::from_hardened_idx(1).unwrap()).unwrap().private_key,
+		 extpriv.ckd_priv(&secp_ctx, util::bip32::ChildNumber::from_hardened_idx(2).unwrap()).unwrap().private_key)
 	}).unwrap();
 	let chain_monitor = Arc::new(ChainInterface::new(rpc_client.clone(), network, logger.clone()));
 
 	let mut rt = tokio::runtime::Runtime::new().unwrap();
 	rt.spawn(future::lazy(move || -> Result<(), ()> {
 		tokio::spawn(rpc_client.make_rpc_call("importprivkey",
-				&[&("\"".to_string() + &util::privkey::Privkey::from_secret_key(import_key_1, true, network).to_wif() + "\""), "\"rust-lightning ChannelMonitor claim\"", "false"], false)
+				&[&("\"".to_string() + &import_key_1.to_wif() + "\""), "\"rust-lightning ChannelMonitor claim\"", "false"], false)
 				.then(|_| Ok(())));
 		tokio::spawn(rpc_client.make_rpc_call("importprivkey",
-				&[&("\"".to_string() + &util::privkey::Privkey::from_secret_key(import_key_2, true, network).to_wif() + "\""), "\"rust-lightning cooperative close\"", "false"], false)
+				&[&("\"".to_string() + &import_key_2.to_wif() + "\""), "\"rust-lightning cooperative close\"", "false"], false)
 				.then(|_| Ok(())));
 
 		let monitors_loaded = ChannelMonitor::load_from_disk(&(data_path.clone() + "/monitors"));
@@ -406,7 +406,7 @@ fn main() {
 				for (outpoint, monitor) in monitors_loaded.iter() {
 					monitors_refs.insert(*outpoint, monitor);
 				}
-				<(Sha256dHash, channelmanager::ChannelManager)>::read(&mut f, channelmanager::ChannelManagerReadArgs {
+				<(sha256d::Hash, channelmanager::ChannelManager)>::read(&mut f, channelmanager::ChannelManagerReadArgs {
 					keys_manager: keys.clone(),
 					fee_estimator: fee_estimator.clone(),
 					monitor: monitor.clone(),
@@ -612,15 +612,7 @@ fn main() {
 									}
 
 									let final_cltv = invoice.expiry_time();
-									if final_cltv.is_none() {
-										println!("Invoice was missing final CLTV");
-										fail_return!();
-									}
-									if final_cltv.unwrap().as_seconds() > std::u32::MAX as u64 {
-										println!("Invoice had garbage final cltv");
-										fail_return!();
-									}
-									match router.get_route(&*invoice.recover_payee_pub_key(), Some(&channel_manager.list_usable_channels()), &route_hint, amt, final_cltv.unwrap().as_seconds() as u32) {
+									match router.get_route(&*invoice.recover_payee_pub_key(), Some(&channel_manager.list_usable_channels()), &route_hint, amt, final_cltv.map(lightning_invoice::ExpiryTime::as_seconds).unwrap_or(3600) as u32) {
 										Ok(route) => {
 											let mut payment_hash = PaymentHash([0; 32]);
 											payment_hash.0.copy_from_slice(&invoice.payment_hash().0[..]);

@@ -1,4 +1,4 @@
-use bitcoin::util::hash::Sha256dHash;
+use bitcoin_hashes::{Hash, sha256d};
 use secp256k1::key::PublicKey;
 
 pub fn hex_to_vec(hex: &str) -> Option<Vec<u8>> {
@@ -22,7 +22,7 @@ pub fn hex_to_vec(hex: &str) -> Option<Vec<u8>> {
 	Some(out)
 }
 
-pub fn hex_to_u256_rev(hex: &str) -> Option<Sha256dHash> {
+pub fn hex_to_u256_rev(hex: &str) -> Option<sha256d::Hash> {
 	if hex.len() != 64 { return None; }
 
 	let mut out = [0; 32];
@@ -44,7 +44,7 @@ pub fn hex_to_u256_rev(hex: &str) -> Option<Sha256dHash> {
 		}
 	}
 
-	Some(Sha256dHash::from_data(&out))
+	sha256d::Hash::from_slice(&out).ok()
 }
 
 pub fn hex_to_compressed_pubkey(hex: &str) -> Option<PublicKey> {

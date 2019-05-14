@@ -42,7 +42,7 @@ use rand::{thread_rng, Rng};
 
 use lightning::chain;
 use lightning::chain::chaininterface;
-use lightning::chain::chaininterface::ChainWatchInterface;
+use lightning::chain::chaininterface::{ChainWatchInterface, ConfirmationTarget, FeeEstimator};
 use lightning::chain::keysinterface::{KeysInterface, KeysManager, SpendableOutputDescriptor};
 use lightning::ln::{peer_handler, router, channelmanager, channelmonitor};
 use lightning::ln::channelmonitor::ManyChannelMonitor;
@@ -64,6 +64,7 @@ use std::{env, mem};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicUsize;
 use std::vec::Vec;
 use std::time::{Instant, Duration};
 use std::io::{Cursor, Write};
@@ -386,7 +387,7 @@ fn main() {
 	let mut network = constants::Network::Bitcoin;
 	let secp_ctx = Secp256k1::new();
 
-	let fee_estimator = Arc::new(FeeEstimator::new());
+	let fee_estimator = Arc::new(chain_monitor::FeeEstimator::new());
 
 	{
 		println!("Checking validity of RPC URL to bitcoind...");
@@ -449,7 +450,12 @@ fn main() {
 
 		let monitors_loaded = ChannelMonitor::load_from_disk(&(data_path.clone() + "/monitors"));
 		let monitor = Arc::new(ChannelMonitor {
-			monitor: channelmonitor::SimpleManyChannelMonitor::new(chain_monitor.clone(), chain_monitor.clone(), logger.clone()),
+			monitor: channelmonitor::SimpleManyChannelMonitor::new(
+				chain_monitor.clone(),
+				chain_monitor.clone(),
+				logger.clone(),
+				fee_estimator.clone()
+			),
 			file_prefix: data_path.clone() + "/monitors",
 		});
 
@@ -508,7 +514,12 @@ fn main() {
 			Ok(())
 		}).then(|_| { Ok(()) }));
 
-		spawn_chain_monitor(fee_estimator, rpc_client, chain_monitor, event_notify.clone());
+		spawn_chain_monitor(
+			fee_estimator,
+			rpc_client,
+			chain_monitor,
+			event_notify.clone()
+		);
 
 		tokio::spawn(tokio::timer::Interval::new(Instant::now(), Duration::new(1, 0)).for_each(move |_| {
 			//TODO: Regularly poll chain_monitor.txn_to_broadcast and send them out

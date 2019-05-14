@@ -462,6 +462,7 @@ fn main() {
 		let mut config = config::UserConfig::new();
 		config.channel_options.fee_proportional_millionths = FEE_PROPORTIONAL_MILLIONTHS;
 		config.channel_options.announced_channel = ANNOUNCE_CHANNELS;
+		config.peer_channel_config_limits.force_announced_channel_preference = false;
 
 		let channel_manager = if let Ok(mut f) = fs::File::open(data_path.clone() + "/manager_data") {
 			let (last_block_hash, manager) = {

@@ -127,6 +127,7 @@ fn print_help() {
 	println!("'l p' List the node_ids of all connected peers");
 	println!("'l c' List details about all channels");
 	println!("'s invoice [amt]' Send payment to an invoice, optionally with amount as whole msat if its not in the invoice");
+	println!("'r description [amount_msat]' generate BOLT11 invoice (description without spaces please)");
 	println!("'p' Gets a new payment_hash for receiving funds");
 	println!("'q' panic and quit");
 	println!("'h' Show this help message");
@@ -716,6 +717,36 @@ fn main() {
 						},
 					}
 				},
+				Some("r") => {
+					match args.get(1) {
+						Some(description) => {
+							let mut payment_preimage = [0; 32];
+							thread_rng().fill_bytes(&mut payment_preimage);
+							let payment_hash = bitcoin_hashes::sha256::Hash::hash(&payment_preimage);
+							payment_preimages.lock().unwrap().insert(PaymentHash(payment_hash.into_inner()), PaymentPreimage(payment_preimage));
+
+							let invoice = lightning_invoice::InvoiceBuilder::new(lightning_invoice::Currency::BitcoinTestnet)
+								.description(description.to_string())
+								.payment_hash(payment_hash)
+								.current_timestamp()
+								.build_signed(|invoice_hash| {
+									secp_ctx.sign_recoverable(invoice_hash, &keys.get_node_secret())
+								});
+
+							match invoice {
+								Ok(invoice) => {
+									println!("BOLT11 invoice: {}", invoice);
+								},
+								Err(e) => {
+									println!("Error creating the invoice: {:?}", e);
+								},
+							}
+						},
+						None => {
+							println!("Please specify a description without spaces");
+						}
+					}
+				}
 				Some("p") => { // 'p'
 					let mut payment_preimage = [0; 32];
 					thread_rng().fill_bytes(&mut payment_preimage);

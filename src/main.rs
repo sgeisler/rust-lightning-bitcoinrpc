@@ -120,6 +120,7 @@ impl FromStr for NodeDescriptor {
 
 fn print_help() {
 	println!("Commands:");
+	println!("'i' show node information, currently only the node id");
 	println!("'c pubkey@host:port' Connect to given host+port, with given pubkey for auth");
 	println!("'n pubkey value push_value' Create a channel with the given connected node (by pubkey), value in satoshis, and push the given msat value");
 	println!("'k channel_id' Close a channel with the given id");
@@ -544,6 +545,9 @@ fn main() {
 			let args = line.split(" ").collect::<Vec<_>>();
 
 			match args.get(0).map(|c| *c) {
+				Some("i") => {
+					println!("Our node id: {}", hex_str(&PublicKey::from_secret_key(&secp_ctx, &keys.get_node_secret()).serialize()));
+				},
 				Some("c") => {
 					match args.get(1).map(|arg| arg.parse()) {
 						Some(Ok(NodeDescriptor {pubkey, addr})) => {

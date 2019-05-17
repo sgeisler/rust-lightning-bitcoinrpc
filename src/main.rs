@@ -725,13 +725,23 @@ fn main() {
 							let payment_hash = bitcoin_hashes::sha256::Hash::hash(&payment_preimage);
 							payment_preimages.lock().unwrap().insert(PaymentHash(payment_hash.into_inner()), PaymentPreimage(payment_preimage));
 
-							let invoice = lightning_invoice::InvoiceBuilder::new(lightning_invoice::Currency::BitcoinTestnet)
+							let mut ib = lightning_invoice::InvoiceBuilder::new(lightning_invoice::Currency::BitcoinTestnet)
 								.description(description.to_string())
 								.payment_hash(payment_hash)
-								.current_timestamp()
-								.build_signed(|invoice_hash| {
-									secp_ctx.sign_recoverable(invoice_hash, &keys.get_node_secret())
-								});
+								.current_timestamp();
+
+
+							if let Some(amount) = args.get(2) {
+								if let Ok(amount) = amount.parse::<u64>() {
+									ib = ib.amount_pico_btc(amount * 10);
+								} else {
+									println!("Couldn't parse amount!");
+								}
+							}
+
+							let invoice = ib.build_signed(|invoice_hash| {
+								secp_ctx.sign_recoverable(invoice_hash, &keys.get_node_secret())
+							});
 
 							match invoice {
 								Ok(invoice) => {

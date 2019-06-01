@@ -620,24 +620,28 @@ fn main() {
 					} else { println!("Bad channel_id hex"); }
 				},
 				Some("l") => { // 'l'
-					if line.as_bytes()[2] == 'p' as u8 {
-						let mut nodes = String::new();
-						for node_id in peer_manager.get_peer_node_ids() {
-							nodes += &format!("{}, ", hex_str(&node_id.serialize()));
-						}
-						println!("Connected nodes: {}", nodes);
-					} else if line.as_bytes()[2] == 'c' as u8 {
-						println!("All channels:");
-						for chan_info in channel_manager.list_channels() {
-							if let Some(short_id) = chan_info.short_channel_id {
-								println!("id: {}, short_id: {}, peer: {}, value: {} sat", hex_str(&chan_info.channel_id[..]), short_id, hex_str(&chan_info.remote_network_id.serialize()), chan_info.channel_value_satoshis);
-							} else {
-								println!("id: {}, not yet confirmed, peer: {}, value: {} sat", hex_str(&chan_info.channel_id[..]), hex_str(&chan_info.remote_network_id.serialize()), chan_info.channel_value_satoshis);
+					match args.get(1).map(|c| *c) {
+						Some("p") => {
+							let mut nodes = String::new();
+							for node_id in peer_manager.get_peer_node_ids() {
+								nodes += &format!("{}, ", hex_str(&node_id.serialize()));
 							}
+							println!("Connected nodes: {}", nodes);
+						},
+						Some("c") => {
+							println!("All channels:");
+							for chan_info in channel_manager.list_channels() {
+								if let Some(short_id) = chan_info.short_channel_id {
+									println!("id: {}, short_id: {}, peer: {}, value: {} sat", hex_str(&chan_info.channel_id[..]), short_id, hex_str(&chan_info.remote_network_id.serialize()), chan_info.channel_value_satoshis);
+								} else {
+									println!("id: {}, not yet confirmed, peer: {}, value: {} sat", hex_str(&chan_info.channel_id[..]), hex_str(&chan_info.remote_network_id.serialize()), chan_info.channel_value_satoshis);
+								}
+							}
+						},
+						Some(_) | None => {
+							println!("Listing of non-peer/channel objects not yet implemented");
 						}
-					} else {
-						println!("Listing of non-peer/channel objects not yet implemented");
-					}
+					};
 				},
 				Some("s") => { // 's'
 					let mut args = line.split_at(2).1.split(' ');
